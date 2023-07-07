@@ -1,0 +1,99 @@
+---
+title: "KM_Survival"
+output: html_document
+date: "2023-06-21"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading libraries.
+```{r}
+library(tidyverse)
+library(survival)
+library(lubridate)
+library(ggthemes)
+library(readxl)
+library(writexl)
+library(janitor)
+library(survminer)
+```
+
+Importing data and formatting.
+```{r}
+#Importing data
+fate_clean_km_2021_22 <- read_xlsx("/Volumes/Samsung_T5/BOBWHITE_DATA/Clean/fate_clean_km_2021_22") %>%
+  mutate(fate_date = ymd(fate_date),
+         date_added = ymd(date_added))
+
+#Taking a quick look
+fate_clean_km_2021_22 %>%
+  view()
+
+#Making fate column binary. 0 = right-censored, 1 = dead.
+#Note: if you run this a second time, all birds will be dead, as there is no fate "Censored" after running the first time.
+fate_clean_km_2021_22$fate <- ifelse(fate_clean_km_2021_22$fate == "Censored", 0, 1) 
+
+#Making sure conversion to binary fate column was successful.
+fate_clean_km_2021_22 %>%
+  view()
+```
+
+Beginning with staggered entry KM.
+```{r}
+#First, we will specify when our survival year begins. We began adding birds the week of 20 October 2021.
+start_date <- as.Date("2021-10-20")
+
+#Next, we will create a column stating when each bird was added to the study. Birds added Oct 20 2021 will be day 0, birds added in Spring (3/14) will be day 145
+fate_clean_km_2021_22$day_added <- as.numeric(fate_clean_km_2021_22$date_added - start_date)
+
+#This creates an error sometimes, but appears to work nonetheless.
+fate_clean_km_2021_22 %>%
+  view()
+
+#Next, we will create a column showing how many days each bird was alive since 20 October 2021 (start time).
+fate_clean_km_2021_22$days_alive <- as.numeric((fate_clean_km_2021_22$fate_date - fate_clean_km_2021_22$date_added) + fate_clean_km_2021_22$day_added)
+
+#This also creates an error sometimes, but again appears to have worked??
+fate_clean_km_2021_22 %>%
+  view()
+```
+
+Fitting our model. First, we will try type = right-censored. We added 50 birds in the Fall, and 60 in the Spring. This approach incorrectly lumps all 110 of these birds together at the start time.
+```{r}
+#Fitting the survival curve.
+km_surv_fit <- survfit(Surv(type = "right", time = fate_clean_km_2021_22$days_alive, event = fate_clean_km_2021_22$fate) ~1)
+
+#Looking at summary, we see all 110 birds at the time of the first event.
+summary(km_surv_fit)
+
+#Plotting our survival curve. The end result appears consistent with the KM Excel spreadsheet... But we know this is an incorrect fit do to the summary
+plot(km_surv_fit,
+     main = "KM Survival curve",
+     xlab = "Number of days after start date",
+     ylab = "Survival")
+
+abline(v = 365, col = "black", lwd = 2, lty = 2)
+grid(col = "lightgray", lty = "dotted")
+```
+
+Next, we try type = interval. Reading the help section of Surv(), this seems to make more sense. But doesn't work.
+```{r}
+#fitting survival curve.
+km_surv_fit <- survfit(Surv(type = "interval", time = fate_clean_km_2021_22$day_added, time2 = fate_clean_km_2021_22$days_alive, event = fate_clean_km_2021_22$fate) ~1)
+
+#Looking at summary, this just seems to dived birds into two intervals -- birds added in Fall and birds added in Spring. It still 110 birds at time = 0, as well.
+summary(km_surv_fit)
+
+#Plotting our survival curve. This isn't what we want!
+plot(km_surv_fit,
+     main = "KM Survival curve",
+     xlab = "Number of days after start date",
+     ylab = "Survival")
+
+grid(col = "lightgray", lty = "dotted")
+```
+
