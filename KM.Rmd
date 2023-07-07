@@ -1,7 +1,7 @@
 ---
-title: "KM_Survival"
+title: "KM"
 output: html_document
-date: "2023-06-21"
+date: '2022-12-31'
 editor_options: 
   chunk_output_type: console
 ---
@@ -13,73 +13,47 @@ knitr::opts_chunk$set(echo = TRUE)
 Loading libraries.
 ```{r}
 library(tidyverse)
-library(survival)
+library(scales)
 library(lubridate)
 library(ggthemes)
-library(readxl)
 library(janitor)
-theme_set(theme_minimal())
+library(survival)
+#install.packages("survminer")
+library(survminer)
+library(readxl)
 ```
 
-Importing data and formatting.
+Importing and cleaning data.
 ```{r}
-#Importhing and cleaning data.
-fate <- read_xlsx("/Volumes/Samsung_T5/BOBWHITE_DATA/BobwhiteData/KM_Fate_Excel_New_Fixed2.xlsx") %>%
+winter_locs <- read_excel("/Users/jeffgrayum/Documents/BobwhiteData/BobwhiteData 2/All_Winter_Locs_Oct_2021_Traps.xlsx") %>%
   clean_names() %>%
-  mutate(added = ymd(added)) %>%
-  rename(fate_date = cause) %>%
- mutate(fate_date = str_replace_all(fate_date, "[a-zA-Z(),\\s]", ""),
-         year = ifelse(nchar(fate_date) == 8, substr(fate_date, nchar(fate_date) - 3, nchar(fate_date)), 
-                       substr(fate_date, nchar(fate_date) - 1, nchar(fate_date))),
-         year = ifelse(year == "21", "2021", ifelse(year == "22", "2022", year)),
-         fate_date = parse_date_time(fate_date, orders = c("mdy", "mdy", "mdy", "dmy", "dmy", "dmy"), truncated = 2)) %>%
-   rename(date_added == added) 
+  mutate(date = as_date(date))
 
-#Looking at it.
-fate %>%
+winter_locs %>%
   view()
 
-#selecting necessary columns.
-fate_km <- fate %>%
-  select(-frequency, -year, -trap_number) %>%
-  rename(date_added = added) %>%
-  mutate(date_added = ymd(date_added),
-         fate_date = as.Date(fate_date)) 
+winter_locs %>%
+  str()
 
-fate_km %>%
+#Adding binary status column ("A" = 1, and "D" = 0).
+winter_locs$status_binary <- winter_locs$status
+
+winter_locs$status_binary <- ifelse(winter_locs$status_binary == "A", 1, 0)
+
+#Adding date column in numeric format
+winter_locs$date <- lubridate::ymd(winter_locs$date)
+winter_locs$date_numeric <- as.numeric(winter_locs$date - as.Date("2021-11-23"))
+
+winter_locs %>%
   view()
-
-#Making fate column binary.
-fate_km$fate <- ifelse(fate_km$fate == "Censored", 0, 1) 
-
-
 
 ```
 
-Beginning with staggered entry KM.
+First attempt at KM
 ```{r}
-#First, we will specify when our survival year begins.
-start_date <- as.Date("2021-10-20")
-
-#Next, we will create a column stating when each bird was added to the study. Birds added Oct 20 2021 will be day 0, birds added in Spring (3/14) will be day 145
-fate_km$day_added <- as.numeric(fate_km$date_added - start_date)
-
-#Next, we will create a column showing how many days each bird was online.
-fate_km$days_online <- as.numeric(fate_km$fate_date - fate_km$date_added)
-
-#Now we will attempt to fit our model.
-km_surv_fit <- survfit(Surv(type = "interval", time = fate_km$days_online, event = fate_km$fate, time2 = fate_km$days_online) ~1)
-
-summary(km_surv_fit)
-
-plot(km_surv_fit)
-
-#Now, let's try with only birds trapped in October.
-fate_km_Oct_2021 <- fate_km %>%
-  filter(day_added < 1) 
-
-km_surv_fit_Oct_2021 <- survfit(Surv(type = "interval", time = fate_km$days_online, event = fate_km$fate, time2 = fate_km$days_online) ~1)
-
-plot(km_surv_fit_Oct_2021)
+surv_object <- Surv(winter_locs$date_numeric, winter_locs$status_binary)
+km_fit <- survfit(surv_object ~ 1)
+ggsurvplot(km_fit, data = winter_locs)
 ```
+
 
