@@ -35,17 +35,17 @@ fate_clean_km_2021_22 %>%
 
 Beginning with staggered entry KM.
 ```{r}
-#First, we will specify when our survival year begins. We began adding birds the week of 20 October 2021...maybe that should be the start date, instead?
+#First, we will specify when our survival year begins (1 Oct 2021). We began adding birds the week of 20 October 2021...maybe that should be the start date, instead?
 start_date <- ymd("2021-10-1")
 
-#Next, we will create a column stating when each bird was added to the study. Birds added Oct 20 2021 will be day 19, birds added in Spring (14 March) will be day 164. 
+#Next, we will create a numeric column stating when each bird was added to the study. Birds added Oct 20 2021 will be day 19, birds added in Spring (14 March) will be day 164. 
 fate_clean_km_2021_22$day_added <- as.numeric(fate_clean_km_2021_22$date_added - start_date)
 
 #Appears to have worked.
 fate_clean_km_2021_22 %>%
   view()
 
-#Next, we will create a column "days_alive" stating how many days each bird was alive since 1 October 2021 (start time).
+#Next, we will create a numeric column "days_alive" stating how many days each bird was alive since 1 October 2021 (start time).
 fate_clean_km_2021_22$days_alive <- as.numeric(fate_clean_km_2021_22$fate_date - start_date)
 
 #Appears to have worked.
@@ -69,9 +69,10 @@ summary(km_surv_fit)
 plot(km_surv_fit,
      main = "KM Survival curve",
      xlab = "Number of days after start date (1 October 2021)",
-     ylab = "Survival")
+     ylab = "Survival",
+     xlim = c(0, 365))
 #Below we add vertical lines at winter and annual survival end dates.
-abline(v = 181, col = "midnight blue", lwd = 2, lty = 2)
+abline(v = 181, col = "midnight blue", lwd = 2, lty = 3)
 abline(v = 365, col = "red", lwd = 2, lty = 2)
 ```
 
@@ -139,7 +140,8 @@ summary(km_surv_fit_summer_2022)
 plot(km_surv_fit_summer_2022,
      main = "KM Summer Survival curve",
      xlab = "Number of days after start date (1 April 2022)",
-     ylab = "Survival")
+     ylab = "Survival",
+      xlim = c(0, 182))
 #Adding vertical line at Sept 30 2022.
 abline(v = 182, col = "red", lwd = 2, lty = 2)
 
