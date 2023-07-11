@@ -25,65 +25,43 @@ library(survminer)
 Importing data and formatting.
 ```{r}
 #Importing data
-fate_clean_km_2021_22 <- read_xlsx("/Volumes/Samsung_T5/BOBWHITE_DATA/Clean/fate_clean_km_2021_22") %>%
+fate_clean_km_2021_22 <- read_xlsx("/Volumes/Samsung_T5/BOBWHITE_DATA/Clean/fate_clean_2021_22.xlsx") %>%
   mutate(fate_date = ymd(fate_date),
-         date_added = ymd(date_added))
+         date_added = ymd(date_added)) 
 
-#Taking a quick look
+#Taking a quick look. Event = 1 is a mortality, 0 is right censored.
 fate_clean_km_2021_22 %>%
   view()
 
-#Making fate column binary. 0 = right-censored, 1 = dead.
-#Note: if you run this a second time, all birds will be dead, as there is no fate "Censored" after running the first time.
-fate_clean_km_2021_22$fate <- ifelse(fate_clean_km_2021_22$fate == "Censored", 0, 1) 
 
-#Making sure conversion to binary fate column was successful.
-fate_clean_km_2021_22 %>%
-  view()
 ```
 
 Beginning with staggered entry KM.
 ```{r}
 #First, we will specify when our survival year begins. We began adding birds the week of 20 October 2021.
-start_date <- as.Date("2021-10-20")
+start_date <- as.Date("2021-10-1")
 
 #Next, we will create a column stating when each bird was added to the study. Birds added Oct 20 2021 will be day 0, birds added in Spring (3/14) will be day 145
 fate_clean_km_2021_22$day_added <- as.numeric(fate_clean_km_2021_22$date_added - start_date)
 
-#This creates an error sometimes, but appears to work nonetheless.
+#Appears to have worked.
 fate_clean_km_2021_22 %>%
   view()
 
-#Next, we will create a column showing how many days each bird was alive since 20 October 2021 (start time).
-fate_clean_km_2021_22$days_alive <- as.numeric((fate_clean_km_2021_22$fate_date - fate_clean_km_2021_22$date_added) + fate_clean_km_2021_22$day_added)
+#Next, we will create a column "days_alive" stating how many days each bird was alive since 20 October 2021 (start time).
+fate_clean_km_2021_22$days_alive <- as.numeric(fate_clean_km_2021_22$fate_date - start_date)
 
-#This also creates an error sometimes, but again appears to have worked??
+#Appears to have worked.
 fate_clean_km_2021_22 %>%
   view()
+
 ```
 
-Fitting our model. First, we will try type = right-censored. We added 50 birds in the Fall, and 60 in the Spring. This approach incorrectly lumps all 110 of these birds together at the start time.
-```{r}
-#Fitting the survival curve.
-km_surv_fit <- survfit(Surv(type = "right", time = fate_clean_km_2021_22$days_alive, event = fate_clean_km_2021_22$fate) ~1)
 
-#Looking at summary, we see all 110 birds at the time of the first event.
-summary(km_surv_fit)
-
-#Plotting our survival curve. The end result appears consistent with the KM Excel spreadsheet... But we know this is an incorrect fit do to the summary
-plot(km_surv_fit,
-     main = "KM Survival curve",
-     xlab = "Number of days after start date",
-     ylab = "Survival")
-
-abline(v = 365, col = "black", lwd = 2, lty = 2)
-grid(col = "lightgray", lty = "dotted")
-```
-
-Next, we try type = interval. Reading the help section of Surv(), this seems to make more sense. But doesn't work.
+Fitting our model. We'll add vertical lines indicating winter and annual survival.
 ```{r}
 #fitting survival curve.
-km_surv_fit <- survfit(Surv(type = "interval", time = fate_clean_km_2021_22$day_added, time2 = fate_clean_km_2021_22$days_alive, event = fate_clean_km_2021_22$fate) ~1)
+km_surv_fit <- survfit(Surv(time = fate_clean_km_2021_22$day_added, time2 = fate_clean_km_2021_22$days_alive, event = fate_clean_km_2021_22$fate) ~1)
 
 #Looking at summary, this just seems to dived birds into two intervals -- birds added in Fall and birds added in Spring. It still 110 birds at time = 0, as well.
 summary(km_surv_fit)
@@ -91,9 +69,80 @@ summary(km_surv_fit)
 #Plotting our survival curve. This isn't what we want!
 plot(km_surv_fit,
      main = "KM Survival curve",
-     xlab = "Number of days after start date",
+     xlab = "Number of days after start date (1 October 2021)",
      ylab = "Survival")
+abline(v = 181, col = "midnight blue", lwd = 2, lty = 2)
+abline(v = 365, col = "red", lwd = 2, lty = 2)
+```
 
-grid(col = "lightgray", lty = "dotted")
+Now, let's create a data frame so we can extract our survival % at March 31st 2022 (winter survival), and Sept 30 2022 (Annual survival)
+```{r}
+# Creating the dataframe
+KM_DF_2021_22 <- data.frame(time = km_surv_fit$time,
+                      surv = km_surv_fit$surv)
+
+#Getting winter survival. We have to use which.min() here, because survival % is only calculated when an event occurs. This will get us to the closest possible day of an event at March 31st.
+winter_surv_2021_22 <- KM_DF_2021_22$surv[which.min(abs(KM_DF_2021_22$time - 181))]
+print(winter_surv_2021_22) #53% seems reasonable.
+
+#Getting annual survival. Same situation as above with which.min().
+annual_surv_2021_22 <- KM_DF_2021_22$surv[which.min(abs(KM_DF_2021_22$time - 365))]
+print(annual_surv_2021_22) #23% seems reasonable, a little higher than we had on excel spreadsheet.
+```
+
+Ok, now lets see if we can do the same thing, but for Summer survival, which begins on April 1st 2022.
+```{r}
+#First, let's filter out birds that died before then.
+fate_km_summer_2022 <- fate_clean_km_2021_22 <- read_xlsx("/Volumes/Samsung_T5/BOBWHITE_DATA/Clean/fate_clean_2021_22.xlsx") %>%
+  mutate(fate_date = ymd(fate_date),
+         date_added = ymd(date_added)) %>%
+  filter(fate_date > ymd("2022-3-30"))
+
+#Looks like that worked.
+fate_km_summer_2022 %>%
+  view()
+
+#Since all our birds for summer survival were "added" on 1 April 2022, lets create a column stating that.
+fate_km_summer_2022 <- fate_km_summer_2022 %>%
+  mutate(day_added_summer = as.numeric(0))
+
+#Now, we will specify our Summer start date as April 1 2022.
+start_date_summer <- ymd("2022-4-1")
+
+
+#Next, we will create a column "days_alive_summer" stating how many days each bird was alive after 1 April 2022
+fate_km_summer_2022$days_alive_summer <- as.numeric(fate_km_summer_2022$fate_date - start_date_summer)
+
+#Appears to have worked.
+fate_km_summer_2022 %>%
+  view()
+```
+
+Fitting our model for summer survival.
+```{r}
+#fitting survival curve.
+km_surv_fit_summer_2022 <- survfit(Surv(time = fate_km_summer_2022$day_added_summer, time2 = fate_km_summer_2022$days_alive_summer, event = fate_clean_km_2021_22$fate) ~1)
+
+#Looking at summary, this just seems to dived birds into two intervals -- birds added in Fall and birds added in Spring. It still 110 birds at time = 0, as well.
+summary(km_surv_fit_summer_2022)
+
+#Plotting our survival curve. This isn't what we want!
+plot(km_surv_fit_summer_2022,
+     main = "KM Summer Survival curve",
+     xlab = "Number of days after start date (1 April 2022)",
+     ylab = "Survival")
+abline(v = 182, col = "red", lwd = 2, lty = 2)
+
+```
+
+Now, let's create our dataframe for summer survival.
+```{r}
+# Creating the dataframe
+KM_DF_Summer_2022 <- data.frame(time = km_surv_fit_summer_2022$time,
+                      surv = km_surv_fit_summer_2022$surv)
+
+#Getting winter survival. We have to use which.min() here, because rows only exist when an event occurs. This will get us to the closest possible day of an event at March 31st.
+Summer_survival_2022 <- KM_DF_Summer_2022$surv[which.min(abs(KM_DF_Summer_2022$time - 182))]
+print(Summer_survival_2022) 
 ```
 
