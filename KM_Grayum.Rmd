@@ -77,17 +77,23 @@ abline(v = 365, col = "red", lwd = 2, lty = 2)
 
 Now, let's create a data frame so we can extract our survival % at March 31st 2022 (winter survival), and Sept 30 2022 (Annual survival)
 ```{r}
-# Creating the dataframe
+# Creating the dataframe with confidence interval
 KM_DF_2021_22 <- data.frame(time = km_surv_fit$time,
-                      surv = km_surv_fit$surv)
+                            surv = km_surv_fit$surv,
+                            lower = km_surv_fit$lower,
+                            upper = km_surv_fit$upper)
 
 #Getting winter survival. We have to use which.min() here, because survival % is only calculated when an event occurs. This will get us to the closest possible day of an event at March 31st.
 winter_surv_2021_22 <- KM_DF_2021_22$surv[which.min(abs(KM_DF_2021_22$time - 181))]
-print(winter_surv_2021_22) #53% seems reasonable.
+lower_winter_2021_22 <- KM_DF_2021_22$lower[which.min(abs(KM_DF_2021_22$time - 181))]
+upper_winter_2021_22 <- KM_DF_2021_22$upper[which.min(abs(KM_DF_2021_22$time - 181))]
+print(c(winter_surv_2021_22, lower_winter_2021_22, upper_winter_2021_22)) #53% seems reasonable.
 
 #Getting annual survival. Same situation as above with which.min().
 annual_surv_2021_22 <- KM_DF_2021_22$surv[which.min(abs(KM_DF_2021_22$time - 365))]
-print(annual_surv_2021_22) #23% seems reasonable, a little higher than we had on excel spreadsheet.
+lower_annual_2021_22 <- KM_DF_2021_22$lower[which.min(abs(KM_DF_2021_22$time - 365))]
+upper_annual_2021_22 <- KM_DF_2021_22$upper[which.min(abs(KM_DF_2021_22$time - 365))]
+print(c(annual_surv_2021_22, lower_annual_2021_22, upper_annual_2021_22)) #23% seems reasonable, a little higher than we had on excel spreadsheet.
 ```
 
 Ok, now lets see if we can do the same thing, but for Summer survival, which begins on April 1st 2022.
